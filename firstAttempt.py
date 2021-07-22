@@ -11,11 +11,7 @@ from torchvision import transforms
 from torch.autograd import Variable
 import pandas as pd
 from PIL import Image
-from matplotlib import cm
-#import json
-#from deepsort import *
 from sort.sort import *
-import pandas as pd
 
 #PATH_TO_1PERSON_TEST_VIDEO = 'data/1-person-test-video.mp4'
 PATH_TO_2PERSON_TEST_VIDEO = 'data/2-people-test-video.mp4'
