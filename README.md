@@ -1,6 +1,25 @@
 [English](https://github.com/nojuskybarats/badge-detection)
 # Badge Detection
 
+# Change Log / Process Flow / Updates
+The person detection model will be doing a lot of work in areas with a significant amount of people - it needs to be very lightweight & fast, yet still reliable - that's why we chose the ssd model provided by Linzaer. It comes in a couple versions, we're still testing out which one to choose, so far the lightest one (version-RFB-320) seems to be working just fine.
+
+When selecting the badge detection model, we focused more on the accuracy, since the model can theoretically run parallel to the rest of the program. So we chose a pre-trained version of the resnet50, faster-rcnn, which was indeed available to achieve near perfect accuracy (90-98% confidence). However, after building the [firstAttempt.py] approach to the problem, it was already very clear that this model is way too big, complicated and most importantly - slow, for the given problem.
+
+That's when we started looking for a new approach and the mobilenet-v3 seems to be a great improvement in general performance. It is much less accurate, with quite a few false positives and negatives, however, the inference time is almost 30 times faster. We're still looking how to improve it's accuracy, but for now this is the best option.
+
+[firstAttempt.py] uses a pandas dataframe to store data, and is so far the fastest approach to the problem (smallest inference time)
+
+[secondAttempt.py] uses OOP, and is more reliable, and more scalable, however performs a little slower than the first approach.
+
+# TODO:
+- investigate multithreading
+- create a lifetime for the Person objects, to guarantee minimal memory usage
+- improve the accuracy of the detection model
+- build the classification model
+- build the interface
+- optimization
+
 ## [ultra-lightweight face detection model](https://github.com/Linzaer/Ultra-Light-Fast-Generic-Face-Detector-1MB)
 This model is a lightweight facedetection model designed for edge computing devices.
 - In terms of model size, the default FP32 precision (.pth) file size is **1.04~1.1MB**, and the inference framework int8 quantization size is about **300KB**.
