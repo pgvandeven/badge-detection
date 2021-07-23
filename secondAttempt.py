@@ -18,9 +18,9 @@ PATH_TO_MULTI_PERSON_TEST_VIDEO = 'data/multiple_person_test.mp4'
 
 # Increasing any of these values results in a better accuracy, however slower speeds
 
-BUFFER = 10                 # max image buffer capacity
-OBJECT_LIFETIME = 6         # How long should the tracker still try to find a lost tracked person (measured in frames)
-MAX_BADGE_CHECK_COUNT = 3      # How many times a full BUFFER should be checked before a person is declared to be an imposter
+BUFFER = 4                      # max image buffer capacity
+OBJECT_LIFETIME = 6             # How long should the tracker still try to find a lost tracked person (measured in frames)
+MAX_BADGE_CHECK_COUNT = 3       # How many times a full BUFFER should be checked before a person is declared to be an imposter
 
 '''
 ------------------------------------------
@@ -74,7 +74,7 @@ def image_loader(image):
     image = Variable(image, requires_grad=True)
     return image
 
-# Make sure any bbox coordinates aren't outside the image
+# Make sure all bbox coordinates are inside the image
 def normaliseBBox(bbox, image_dimensions):
     if bbox[0] < 0:
         bbox[0] = 0
@@ -86,17 +86,19 @@ def normaliseBBox(bbox, image_dimensions):
         bbox[3] = image_dimensions[0]
     return bbox
 
-#create an instance of SORT - this is the tracker
+# Create an instance of SORT - this is the tracker
 mot_tracker = Sort(max_age=OBJECT_LIFETIME) 
 
 cap = cv2.VideoCapture(os.path.join(PATH_TO_MULTI_PERSON_TEST_VIDEO)) 
+fourcc = cv2.VideoWriter_fourcc(*'XVID')
+out = cv2.VideoWriter('output.mp4', fourcc, 24.0, (1920,1080))
 
 tracked_person_list = []
 frame_id = 0
 while True:
 
     frame_id+=1
-
+    print(frame_id)
     ret, orig_image = cap.read()
 
     if ret is False:
@@ -106,6 +108,10 @@ while True:
     # Skip frames, check 1/3 frames
     if frame_id % 2 == 0 or frame_id % 3 == 0:
         continue
+        
+    if frame_id > 250:
+        out.release()
+        break
 
     # Basic image prep
     image = cv2.cvtColor(orig_image, cv2.COLOR_BGR2RGB)
@@ -121,7 +127,7 @@ while True:
         face_data = []
         for i in range(len(faces)):
             # Changing the coordinates to bound the body instead of the face but also ensuring it doesn't go outside of the image bounds
-            # Head to body ratio is ~ 1/4 - 1/8. That can be used to mark the required body size knowing the head measurements
+            # Head to body ratio is ~ 1:4 - 1:8. That can be used to mark the required body size knowing the head measurements
             ratioW = faces[i][2]-faces[i][0]
             ratioH = (faces[i][3]-faces[i][1])*5
             faces[i][0] = int(faces[i][0])-ratioW
@@ -223,7 +229,7 @@ while True:
                 cutout_image = person.getImage(image_id)
                 for element in range(len(badge_prediction[0]["boxes"])):
                     badge_score = np.round(badge_prediction[0]["scores"][element].cpu().numpy(), decimals= 2)
-                    if badge_score > 0.3:  
+                    if badge_score > 0.9:  
                         badges = badge_prediction[0]["boxes"][element].cpu().numpy()
                         badges = badges/(orig_image.shape[0]/cutout_image.shape[0])
                         xB = int(badges[0])# + xP - 10
@@ -243,7 +249,7 @@ while True:
             # Badge Evaluation
             if len(badge_list) > 0:
                 confidence = sum(badge_list)/len(badge_list)
-                if confidence >= 0.20:
+                if confidence >= 0.90:
                     # 
                     # implement badge classification here
                     #
@@ -267,11 +273,12 @@ while True:
                 print("Person {} does not have a badge".format(person.getID()))
                 person.setBadge(False)
 
+    out.write(orig_image)
     cv2.imshow('Badge Detection', orig_image)
-    cv2.waitKey()
-    #print("Currently storing data for {} tracked persons".format(Person.count))
-    
+    print("Currently storing data for {} tracked persons".format(Person.count))
+
     if cv2.waitKey(1) & 0xFF == ord('q'):
         break
+
 cap.release()
 cv2.destroyAllWindows()
