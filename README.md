@@ -9,7 +9,14 @@ That's when we started looking for a new approach and the mobilenet-v3 seems to 
 
 [firstAttempt.py](https://github.com/nojuskybartas/badge-detection/blob/main/firstAttempt.py) uses a pandas dataframe to store data, and is so far the fastest approach to the problem (smallest inference time)
 
-[secondAttempt.py](https://github.com/nojuskybartas/badge-detection/blob/main/secondAttempt.py) uses OOP, and is more reliable, and more scalable, however performs a little slower than the first approach.
+[secondAttempt.py](https://github.com/nojuskybartas/badge-detection/blob/main/secondAttempt.py) uses OOP, and is more reliable, and more scalable, however performs a little slower than the first approach. 
+
+## Update (23 July 2021):
+- The program now supports self-destructing Person objects - meaning memory usage is now minimized, and unsurprisingly, a macbook laptop can now run the program and check significant amounts (tested on 15-20) of people in real time.
+- A single person will only be checked a certain amount of times, and will be assigned a bagde value of either True or False.
+- There are now 3 colour codes - light blue for persons being checked, green for persons that have a badge, and red for persons that do not have a badge.
+- person bounding boxes are now dynamic, calculated using the ratio between the human head and body - this means that a cutout picture of a person more in the back will cover the same amount of body mass as it would if the person was more in the front.
+- I attempted to introduce multi-threading in [thridAttempt.py](https://github.com/nojuskybartas/badge-detection/blob/main/thirdAttempt.py), however that was unsuccessful. 
 
 # TODO:
 - investigate multithreading
