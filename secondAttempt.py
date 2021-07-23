@@ -14,6 +14,7 @@ from person import Person
 
 PATH_TO_1PERSON_TEST_VIDEO = 'data/1-person-test-video.mp4'
 PATH_TO_2PERSON_TEST_VIDEO = 'data/2-people-test-video.mp4'
+PATH_TO_MULTI_PERSON_TEST_VIDEO = 'data/multiple_person_test.mp4'
 
 # Increasing any of these values results in a better accuracy, however slower speeds
 
@@ -64,7 +65,7 @@ print('Badge detection model loaded')
 
 #loads an image and returns a tensor
 #(automatically scales to required input size, therefore any image can be passed forward to the model)
-loader = transforms.Compose([transforms.Scale(300), transforms.ToTensor()])
+loader = transforms.Compose([transforms.Resize(300), transforms.ToTensor()])
 def image_loader(image):
     #image = Image.open(image_name)
     if type(image) != 'PIL':
@@ -73,12 +74,22 @@ def image_loader(image):
     image = Variable(image, requires_grad=True)
     return image
 
+# Make sure any bbox coordinates aren't outside the image
+def normaliseBBox(bbox, image_dimensions):
+    if bbox[0] < 0:
+        bbox[0] = 0
+    if bbox[1] < 0:
+        bbox[0] = 0
+    if bbox[2] > image_dimensions[1]:
+        bbox[2] = image_dimensions[1]
+    if bbox[3] > image_dimensions[0]:
+        bbox[3] = image_dimensions[0]
+    return bbox
+
 #create an instance of SORT - this is the tracker
 mot_tracker = Sort(max_age=OBJECT_LIFETIME) 
 
-# TEMP
-mask = cv2.imread(os.path.join('data/mask.png'),0)
-cap = cv2.VideoCapture(os.path.join(PATH_TO_2PERSON_TEST_VIDEO)) 
+cap = cv2.VideoCapture(os.path.join(PATH_TO_MULTI_PERSON_TEST_VIDEO)) 
 
 tracked_person_list = []
 frame_id = 0
@@ -96,10 +107,6 @@ while True:
     if frame_id % 2 == 0 or frame_id % 3 == 0:
         continue
 
-    # TEMP
-    if frame_id > 80 and frame_id < 100:
-        orig_image = cv2.copyTo(orig_image, mask)
-
     # Basic image prep
     image = cv2.cvtColor(orig_image, cv2.COLOR_BGR2RGB)
     image_dimensions = orig_image.shape     # (h,w,c)
@@ -113,11 +120,15 @@ while True:
         # Formating the arrays for (deep)SORT into a numpy array that contains lists of (x1,y1,x2,y2,score)
         face_data = []
         for i in range(len(faces)):
-            # Changing the coordinates to bound the body instead of the face
-            faces[i][0] = int(faces[i][0])-50
+            # Changing the coordinates to bound the body instead of the face but also ensuring it doesn't go outside of the image bounds
+            # Head to body ratio is ~ 1/4 - 1/8. That can be used to mark the required body size knowing the head measurements
+            ratioW = faces[i][2]-faces[i][0]
+            ratioH = (faces[i][3]-faces[i][1])*5
+            faces[i][0] = int(faces[i][0])-ratioW
             faces[i][1] = int(faces[i][1])
-            faces[i][2] = int(faces[i][2])+50
-            faces[i][3] = int(faces[i][3])+500
+            faces[i][2] = int(faces[i][2])+ratioW
+            faces[i][3] = faces[i][1] + ratioH
+            faces[i] = normaliseBBox(faces[i], image_dimensions)
             temp = np.append(faces[i], face_scores[i])
             face_data.append(temp)
         face_data = np.array(face_data)
@@ -154,12 +165,13 @@ while True:
                 #print('Time taken to find match: {}'.format(time_taken))
                 
                 
-                bbox = track_bbs_ids[tracked_person][:4]
+                bbox = normaliseBBox(track_bbs_ids[tracked_person][:4], image_dimensions)
                 person_score = np.round(face_scores[tracked_person], decimals=4)
                 xP = int(bbox[0])#-50
                 yP = int(bbox[1])
                 x1P = int(bbox[2])#+50
                 y1P = int(bbox[3])#+300
+
                 frame = image[yP:y1P, xP:x1P]
                 frame = image_loader(frame)
 
@@ -177,7 +189,8 @@ while True:
 
                 cv2.rectangle(orig_image, (xP, yP), (x1P, y1P), color, 2)
                 cv2.putText(orig_image, ('person {} - {}'.format(person_id, person_score)), (xP, yP), cv2.FONT_HERSHEY_SIMPLEX, 0.7, color, 2)
-
+    else:
+        print('no faces found')
 
     # Check the BUFFER size, if available, check the badges
     for person in tracked_person_list:
@@ -255,6 +268,7 @@ while True:
                 person.setBadge(False)
 
     cv2.imshow('Badge Detection', orig_image)
+    cv2.waitKey()
     #print("Currently storing data for {} tracked persons".format(Person.count))
     
     if cv2.waitKey(1) & 0xFF == ord('q'):
