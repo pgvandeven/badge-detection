@@ -14,13 +14,19 @@ from person import Person
 
 PATH_TO_1PERSON_TEST_VIDEO = 'data/1-person-test-video.mp4'
 PATH_TO_2PERSON_TEST_VIDEO = 'data/2-people-test-video.mp4'
-define_img_size(1280)
+
+# Increasing any of these values results in a better accuracy, however slower speeds
+
+BUFFER = 10                 # max image buffer capacity
+OBJECT_LIFETIME = 6         # How long should the tracker still try to find a lost tracked person (measured in frames)
+MAX_BADGE_CHECK_COUNT = 3      # How many times a full BUFFER should be checked before a person is declared to be an imposter
 
 '''
 ------------------------------------------
 Loading the first model (face detection)
 ------------------------------------------
 '''
+define_img_size(1280)
 from models.faceDetection.vision.ssd.mb_tiny_RFB_fd import create_Mb_Tiny_RFB_fd, create_Mb_Tiny_RFB_fd_predictor
 
 label_path = "models/faceDetection/voc-model-labels.txt"
@@ -67,43 +73,15 @@ def image_loader(image):
     image = Variable(image, requires_grad=True)
     return image
 
-'''
-------------------------------------------
-'''
-
-#Evaluate Badge
-def badgeDetected(badge_list, person):
-    badge = False
-    if len(badge_list) > 0:
-        confidence = sum(badge_list)/len(badge_list)
-        if confidence >= 0.20:
-            # implement badge classification here
-            badge = True
-            print("Person {} is wearing a badge. Confidence: {}".format(person.getID(), np.round(confidence, decimals=2)))
-        elif confidence >=0.60:
-            print("Can't distinguish whether person {} is wearing a badge. Checking again".format(person.getID()))
-        else:
-            # How to jump to the next else statement (the one below) ?
-            print("Person {} is not wearing a SBP badge".format(person.getID()))
-    else:
-        print("Person {} is not wearing a SBP badge".format(person.getID()))
-
-    return badge
-
-# Initialize a couple variables once before the loop
-buffer = 10
-badge_list = 0
-frame_id = 0
-tracked_person_list = []
-object_lifetime = 6     # How long should the tracker still try to find a lost tracked person (measured in frames)
-
-#create instance of SORT - this is the tracker
-mot_tracker = Sort(max_age=object_lifetime) 
+#create an instance of SORT - this is the tracker
+mot_tracker = Sort(max_age=OBJECT_LIFETIME) 
 
 # TEMP
 mask = cv2.imread(os.path.join('data/mask.png'),0)
 cap = cv2.VideoCapture(os.path.join(PATH_TO_2PERSON_TEST_VIDEO)) 
 
+tracked_person_list = []
+frame_id = 0
 while True:
 
     frame_id+=1
@@ -119,7 +97,7 @@ while True:
         continue
 
     # TEMP
-    if frame_id > 30 and frame_id < 34:
+    if frame_id > 80 and frame_id < 100:
         orig_image = cv2.copyTo(orig_image, mask)
 
     # Basic image prep
@@ -129,7 +107,7 @@ while True:
     # Person Detection
     faces, _, face_scores = face_predictor.predict(image, candidate_size / 2, threshold)
 
-    # If any persons were detected, track them, and add cutout images to their buffer
+    # If any persons were detected, track them, and add cutout images to their BUFFER
 
     if len(faces) != 0:
         # Formating the arrays for (deep)SORT into a numpy array that contains lists of (x1,y1,x2,y2,score)
@@ -148,7 +126,7 @@ while True:
         track_bbs_ids = mot_tracker.update(face_data) #returns numpy array with bbox and id
         
         if len(track_bbs_ids) != 0:
-            # display persons & save cutout's of tracked persons into buffer
+            # display persons & save cutout's of tracked persons into BUFFER
             for tracked_person in range(len(track_bbs_ids)):
 
                 # Check whether the person already exists (i.e. has been detected before), and either return the old one, or create a new instance of Person
@@ -165,12 +143,12 @@ while True:
                             break
                         elif index == len(tracked_person_list)-1:
                             #print("Creating new instance with ID: {}".format(person_id))
-                            person = Person(person_id, buffer, object_lifetime)
+                            person = Person(person_id, BUFFER, OBJECT_LIFETIME)
                             tracked_person_list.append(person)
                             break
                 else:
                     #print("Creating new instance with ID: {}".format(person_id))
-                    person = Person(person_id, buffer, object_lifetime)
+                    person = Person(person_id, BUFFER, OBJECT_LIFETIME)
                     tracked_person_list.append(person)
                 #time_taken = time.time() - start_time
                 #print('Time taken to find match: {}'.format(time_taken))
@@ -188,18 +166,20 @@ while True:
                 # Reseting the age of each tracked Person Object
                 person.age = 0
 
-                # If a person was ever detected with a badge, draw a green box, else - red and save image to buffer
-                if person.hasBadge():
+                # If a person was detected with a badge, draw a green box, if was detected to not have a badge - red, if it's unknown - yellow and save image to BUFFER for further checks
+                if person.hasBadge() is None:
+                    person.addImageToBuffer([frame])
+                    color = (255, 255, 0)
+                elif person.hasBadge() is True:
                     color = (0, 255, 0)
                 else:
-                    person.addImageToBuffer([frame])
                     color = (0, 0, 255)
 
                 cv2.rectangle(orig_image, (xP, yP), (x1P, y1P), color, 2)
                 cv2.putText(orig_image, ('person {} - {}'.format(person_id, person_score)), (xP, yP), cv2.FONT_HERSHEY_SIMPLEX, 0.7, color, 2)
 
 
-    # Check the buffer size, if available, check the badges
+    # Check the BUFFER size, if available, check the badges
     for person in tracked_person_list:
 
         # Self-destruction of Person objects (if they're not being used)
@@ -212,21 +192,18 @@ while True:
                     break
             continue
 
-        if person.hasBadge() == 1:
+        if person.hasBadge():
+            # Exit the loop
             #print('We already know that person {} has a badge'.format(person.getID()))
             continue
 
-        if person.getBufferOppacity() == buffer:
-            print('Person {} has reached the max buffer size. Checking for a badge'.format(person.getID()))
-            
-            start_time = time.time()
-            
+        if person.hasBadge() == None and person.getBufferOppacity() == BUFFER:
             image_batch = person.getBuffer()
-            
             badge_list = []
 
-            for image_id in range(buffer):
-                # Badge Detection
+            # Badge Detection
+            for image_id in range(BUFFER):
+                
                 with torch.no_grad():
                     badge_prediction = badge_detection_model(image_batch[image_id])
 
@@ -244,21 +221,39 @@ while True:
                         cv2.rectangle(cutout_image, (xB, yB), (x1B, y1B), (0,0,255), 2)
                         cv2.putText(cutout_image, ('badge: ' + str(badge_score)), (xB, yB), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
 
-                #Demo-ing the buffer
-                #windowName = 'person {}'.format(person.getID())
-                #cv2.imshow(windowName, cutout_image)
-                #cv2.waitKey(1)
-
-            # Saving to memory that for this person the badge was found if it was indeed found (and wasn't found before)
-            if not person.hasBadge():
-                if badgeDetected(badge_list, person):
-                    person.setBadge()
+                # Demo-ing the BUFFER
+                windowName = 'person {}'.format(person.getID())
+                cv2.imshow(windowName, cutout_image)
+                cv2.waitKey(1)
+            cv2.destroyWindow(windowName)
+            
+            # Badge Evaluation
+            if len(badge_list) > 0:
+                confidence = sum(badge_list)/len(badge_list)
+                if confidence >= 0.20:
+                    # 
+                    # implement badge classification here
+                    #
+                    value = True
                     person.clearBuffer() #This person won't be checked again - free-ing up memory
+                    #print("Person {} is wearing a SBP badge. Confidence: {}".format(person.getID(), np.round(confidence, decimals=2)))
+                elif confidence >=0.60:
+                    value = None
+                    #print("Can't distinguish whether person {} is wearing a badge. Checking again".format(person.getID()))
+                else:
+                    value = None
+                    #print("Person {} is not wearing a SBP badge".format(person.getID()))
+                person.setBadge(value)
+            else:
+                person.setBadge(None)
+                #print("Person {} is not wearing a SBP badge".format(person.getID()))
+            
+            # if the badge has been checked enough times and not found, report that badge was not found.
+            if person.getBadgeCheckCount() == MAX_BADGE_CHECK_COUNT:
+                print("ALERT")
+                print("Person {} does not have a badge".format(person.getID()))
+                person.setBadge(False)
 
-            time_taken = time.time() - start_time
-            print('Badge Detection Inference time: {}s for a batch of {} images'.format(np.round(time_taken, decimals=3), buffer))
-            #cv2.destroyWindow(windowName)
-        
     cv2.imshow('Badge Detection', orig_image)
     #print("Currently storing data for {} tracked persons".format(Person.count))
     

@@ -9,7 +9,8 @@ class Person(object):
         self.id = id
         self.maxBufferSize = maxBufferSize
         self.buffer = []
-        self.badge = False
+        self.badge = None
+        self.badgeCheckCount = 0
         self.maxLifetime = maxLifetime
         self.age = 0
         Person.count += 1
@@ -49,7 +50,9 @@ class Person(object):
     def hasBadge(self):
         return self.badge
     
-    def setBadge(self, value=True):
+    def setBadge(self, value=None):
+        if value != True:
+            self.badgeCheckCount +=1
         self.badge = value
 
     # Check whether the object is still being tracked
@@ -59,7 +62,10 @@ class Person(object):
             return False
         else:
             return True
-            
+
+    def getBadgeCheckCount(self):
+        return self.badgeCheckCount
+
     def __del__(self):
         #print("Deleting person {} from memory".format(self.getID()))
         pass
