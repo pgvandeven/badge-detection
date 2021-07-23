@@ -4,12 +4,15 @@ from torchvision import transforms
 
 class Person(object):
 
-    def __init__(self, id, maxBufferSize, lifetime=10):
+    count = 0
+    def __init__(self, id, maxBufferSize, maxLifetime=1):
         self.id = id
         self.maxBufferSize = maxBufferSize
         self.buffer = []
         self.badge = False
-        self.lifetime = lifetime
+        self.maxLifetime = maxLifetime
+        self.age = 0
+        Person.count += 1
 
         #TODO: implement classification model functionality
         #self.badgeColor = None
@@ -40,7 +43,6 @@ class Person(object):
 
     def addImageToBuffer(self, image):
         if self.getBufferOppacity() >= self.getMaxBufferSize():
-            print("max buffer reached")
             del self.buffer[0]
         self.buffer.append(image)
     
@@ -50,5 +52,14 @@ class Person(object):
     def setBadge(self, value=True):
         self.badge = value
 
-    
+    # Check whether the object is still being tracked
+    def isAlive(self):
+        self.age += 1
+        if self.age >= self.maxLifetime:
+            return False
+        else:
+            return True
             
+    def __del__(self):
+        #print("Deleting person {} from memory".format(self.getID()))
+        pass

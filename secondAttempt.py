@@ -69,32 +69,24 @@ def image_loader(image):
 
 '''
 ------------------------------------------
-Loading SORT
-------------------------------------------
 '''
-#create instance of SORT
-mot_tracker = Sort() 
-
-print('Tracker initialized')
-# DeepSORT is for future implementation, as it is powerful enough to distinguish between two or more similarly dressed people
-#deepsort = deepsort_rbc('/Users/nkybartas/Desktop/Ultra-Light-Fast-Generic-Face-Detector-1MB-master/deep_sort/ckpts/mars-small128.ckpt-68577')
 
 #Evaluate Badge
-def badgeDetected(badge_list):
+def badgeDetected(badge_list, person):
     badge = False
     if len(badge_list) > 0:
         confidence = sum(badge_list)/len(badge_list)
         if confidence >= 0.20:
             # implement badge classification here
             badge = True
-            print("Person {} is wearing a badge. Confidence: {}".format(index, np.round(confidence, decimals=2)))
+            print("Person {} is wearing a badge. Confidence: {}".format(person.getID(), np.round(confidence, decimals=2)))
         elif confidence >=0.60:
-            print("Can't distinguish whether person {} is wearing a badge. Checking again".format(index))
+            print("Can't distinguish whether person {} is wearing a badge. Checking again".format(person.getID()))
         else:
             # How to jump to the next else statement (the one below) ?
-            print("Person {} is not wearing a SBP badge".format(index))
+            print("Person {} is not wearing a SBP badge".format(person.getID()))
     else:
-        print("Person {} is not wearing a SBP badge".format(index))
+        print("Person {} is not wearing a SBP badge".format(person.getID()))
 
     return badge
 
@@ -103,7 +95,13 @@ buffer = 10
 badge_list = 0
 frame_id = 0
 tracked_person_list = []
+object_lifetime = 6     # How long should the tracker still try to find a lost tracked person (measured in frames)
 
+#create instance of SORT - this is the tracker
+mot_tracker = Sort(max_age=object_lifetime) 
+
+# TEMP
+mask = cv2.imread(os.path.join('data/mask.png'),0)
 cap = cv2.VideoCapture(os.path.join(PATH_TO_2PERSON_TEST_VIDEO)) 
 
 while True:
@@ -119,6 +117,10 @@ while True:
     # Skip frames, check 1/3 frames
     if frame_id % 2 == 0 or frame_id % 3 == 0:
         continue
+
+    # TEMP
+    if frame_id > 30 and frame_id < 34:
+        orig_image = cv2.copyTo(orig_image, mask)
 
     # Basic image prep
     image = cv2.cvtColor(orig_image, cv2.COLOR_BGR2RGB)
@@ -163,12 +165,12 @@ while True:
                             break
                         elif index == len(tracked_person_list)-1:
                             #print("Creating new instance with ID: {}".format(person_id))
-                            person = Person(person_id, buffer)
+                            person = Person(person_id, buffer, object_lifetime)
                             tracked_person_list.append(person)
                             break
                 else:
                     #print("Creating new instance with ID: {}".format(person_id))
-                    person = Person(person_id, buffer)
+                    person = Person(person_id, buffer, object_lifetime)
                     tracked_person_list.append(person)
                 #time_taken = time.time() - start_time
                 #print('Time taken to find match: {}'.format(time_taken))
@@ -183,6 +185,9 @@ while True:
                 frame = image[yP:y1P, xP:x1P]
                 frame = image_loader(frame)
 
+                # Reseting the age of each tracked Person Object
+                person.age = 0
+
                 # If a person was ever detected with a badge, draw a green box, else - red and save image to buffer
                 if person.hasBadge():
                     color = (0, 255, 0)
@@ -196,6 +201,16 @@ while True:
 
     # Check the buffer size, if available, check the badges
     for person in tracked_person_list:
+
+        # Self-destruction of Person objects (if they're not being used)
+        if not person.isAlive():
+            for index in range(len(tracked_person_list)):
+                if tracked_person_list[index] == person:
+                    #print('Person with id: {} is in the list at index {}'.format(person.getID(),index))
+                    tracked_person_list.pop(index)
+                    Person.count -= 1
+                    break
+            continue
 
         if person.hasBadge() == 1:
             #print('We already know that person {} has a badge'.format(person.getID()))
@@ -230,25 +245,22 @@ while True:
                         cv2.putText(cutout_image, ('badge: ' + str(badge_score)), (xB, yB), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
 
                 #Demo-ing the buffer
-                windowName = 'person {}'.format(person.getID())
-                cv2.imshow(windowName, cutout_image)
-                cv2.waitKey(1)
+                #windowName = 'person {}'.format(person.getID())
+                #cv2.imshow(windowName, cutout_image)
+                #cv2.waitKey(1)
 
             # Saving to memory that for this person the badge was found if it was indeed found (and wasn't found before)
             if not person.hasBadge():
-                if badgeDetected(badge_list):
+                if badgeDetected(badge_list, person):
                     person.setBadge()
                     person.clearBuffer() #This person won't be checked again - free-ing up memory
 
             time_taken = time.time() - start_time
             print('Badge Detection Inference time: {}s for a batch of {} images'.format(np.round(time_taken, decimals=3), buffer))
-            cv2.destroyWindow(windowName)
-
-        # TODO: implement a self-destruction of Person objects (if they're not being used)
-
+            #cv2.destroyWindow(windowName)
         
-    cv2.imshow('Badge Detection Test', orig_image)
-    #print("Currently storing data for {} tracked persons".format(len(tracked_person_list)))
+    cv2.imshow('Badge Detection', orig_image)
+    #print("Currently storing data for {} tracked persons".format(Person.count))
     
     if cv2.waitKey(1) & 0xFF == ord('q'):
         break

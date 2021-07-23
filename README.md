@@ -1,4 +1,3 @@
-[English](https://github.com/nojuskybarats/badge-detection)
 # Badge Detection
 
 # Change Log / Process Flow / Updates

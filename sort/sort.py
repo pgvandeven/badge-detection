@@ -96,6 +96,7 @@ class KalmanBoxTracker(object):
   This class represents the internal state of individual tracked objects observed as bbox.
   """
   count = 0
+  id_list = []
   def __init__(self,bbox):
     """
     Initialises a tracker using initial bounding box.
@@ -113,7 +114,11 @@ class KalmanBoxTracker(object):
 
     self.kf.x[:4] = convert_bbox_to_z(bbox)
     self.time_since_update = 0
-    self.id = KalmanBoxTracker.count
+    for idx in range(KalmanBoxTracker.count+1):
+      if idx not in KalmanBoxTracker.id_list:
+        self.id = idx
+        KalmanBoxTracker.id_list.append(idx)
+        break
     KalmanBoxTracker.count += 1
     self.history = []
     self.hits = 0
@@ -149,6 +154,15 @@ class KalmanBoxTracker(object):
     Returns the current bounding box estimate.
     """
     return convert_x_to_bbox(self.kf.x)
+  
+  def __del__(self):
+    #print("Deleting tracker for person with ID: {}".format(self.id))
+    for idx in range(len(KalmanBoxTracker.id_list)):
+      if KalmanBoxTracker.id_list[idx] == self.id:
+        KalmanBoxTracker.id_list.pop(idx)
+        break
+    KalmanBoxTracker.count -= 1
+
 
 
 def associate_detections_to_trackers(detections,trackers,iou_threshold = 0.3):
