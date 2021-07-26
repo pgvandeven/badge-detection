@@ -14,7 +14,7 @@ class PersonDetector():
         from models.faceDetection.vision.ssd.mb_tiny_RFB_fd import create_Mb_Tiny_RFB_fd, create_Mb_Tiny_RFB_fd_predictor
 
         label_path = "models/faceDetection/voc-model-labels.txt"
-        model_path = "models/faceDetection/version-RFB-320.pth"
+        model_path = "models/faceDetection/version-RFB-640.pth"
         net_type = "RFB"
         class_names = ['BACKGROUND', 'face']
         num_classes = len(class_names)

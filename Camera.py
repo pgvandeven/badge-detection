@@ -1,5 +1,5 @@
 import cv2
-import time
+from datetime import datetime
 from torch import no_grad
 import numpy as np
 from sort.sort import *
@@ -13,7 +13,7 @@ from utils import *
 class SurveillanceCamera(object):
 
     count = 0
-    def __init__(self, id_number, face_predictor, badge_predictor, path_to_stream, buffer_size, object_lifetime, max_badge_check_count, interface=True):
+    def __init__(self, id_number, face_predictor, badge_predictor, path_to_stream, camera_fps, wanted_fps, buffer_size, object_lifetime, max_badge_check_count, interface=True, record=False):
 
         self.id = id_number 
         self.buffer_size = buffer_size
@@ -21,13 +21,20 @@ class SurveillanceCamera(object):
         self.max_badge_check_count = max_badge_check_count
         self.interface = interface
         self.cap = cv2.VideoCapture(path_to_stream) 
+        self.record = record
+        if self.record:
+            now = datetime.now()
+            current_time = now.strftime(r"%d-%m-%Y_%H-%M-%S")
+            _, image = self.cap.read()
+            fourcc = cv2.VideoWriter_fourcc(*'XVID')
+            self.out = cv2.VideoWriter('Camera {} - {}.mp4'.format(self.id, current_time), fourcc, wanted_fps, (image.shape[1],image.shape[0]))
         self.mot_tracker = Sort(max_age=object_lifetime) 
         self.face_predictor = face_predictor
         self.badge_predictor = badge_predictor
         self.tracked_person_list = []
         self.frame_id = 0
         SurveillanceCamera.count += 1
-
+        self.frames_to_skip = int(camera_fps/wanted_fps)
 
     def update(self):
 
@@ -38,12 +45,20 @@ class SurveillanceCamera(object):
                 print("Exiting. Code 0")
                 return False
 
+            # FPS Control. 
+            for i in range(2, self.frames_to_skip+1):
+                if self.frame_id % i == 0:
+                    #print("skipped frame {}".format(self.frame_id))
+                    return
+            
+            self.frame_id = 1
+
             # Basic image prep
             image = cv2.cvtColor(self.orig_image, cv2.COLOR_BGR2RGB)
             image_dimensions = self.orig_image.shape     # (h,w,c)
 
             # Person Detection
-            faces, _, face_scores = self.face_predictor.predict(image, 500, 0.75)
+            faces, _, face_scores = self.face_predictor.predict(image, 500, 0.9)
 
             # If any persons were detected, track them, and add cutout images to their BUFFER
             if len(faces) != 0:
@@ -126,10 +141,12 @@ class SurveillanceCamera(object):
                 time.sleep(3)
 
             if self.interface:
-                x = int(self.orig_image.shape[1]/11)
+                x = int(self.orig_image.shape[1]/12)
                 y = int(self.orig_image.shape[0]/11)
-                cv2.putText(self.orig_image, "Tracking: {}".format(len(self.tracked_person_list)), (x, y), cv2.FONT_HERSHEY_SIMPLEX, 4, (100,0,255), 8)
+                size = int(x/40)
+                cv2.putText(self.orig_image, "Tracking: {}".format(len(self.tracked_person_list)), (x, y), cv2.FONT_HERSHEY_SIMPLEX, size, (100,0,255), int(size))
                 cv2.imshow('Camera {}'.format(self.id), self.orig_image)
+                self.out.write(self.orig_image)
                 # QUESTION
                 # added a waitkey here because otherwise the visual interface freezes after a badge is found. But why? When a badge is found that's exactly when there's supposed to be less computation going on, i.e. the program should run smoother
                 cv2.waitKey(1)
@@ -164,7 +181,7 @@ class SurveillanceCamera(object):
                         cutout_image = person.getImage(image_id)
                         for element in range(len(badge_prediction[0]["boxes"])):
                             badge_score = np.round(badge_prediction[0]["scores"][element].cpu().numpy(), decimals= 2)
-                            if badge_score > 0.9:  
+                            if badge_score > 0.8:  
                                 badges = badge_prediction[0]["boxes"][element].cpu().numpy()
                                 badges = badges/(self.orig_image.shape[0]/cutout_image.shape[0])
                                 xB = int(badges[0])# + xP - 10
@@ -184,14 +201,14 @@ class SurveillanceCamera(object):
                     # Badge Evaluation
                     if len(badge_list) > 0:
                         confidence = sum(badge_list)/len(badge_list)
-                        if confidence >= 0.90:
+                        if confidence >= 0.85:
                             # 
                             # implement badge classification here
                             #
                             value = True
                             person.clearBuffer() #This person won't be checked again - free-ing up memory
                             #print("Person {} is wearing a SBP badge. Confidence: {}".format(person.getID(), np.round(confidence, decimals=2)))
-                        elif confidence >=0.60:
+                        elif confidence >=0.70:
                             value = None
                             #print("Can't distinguish whether person {} is wearing a badge. Checking again".format(person.getID()))
                         else:
@@ -210,6 +227,10 @@ class SurveillanceCamera(object):
         
 
     def __del__(self):
-        self.cap.release()
+        print("Camera {} turned off".format(self.id))
+        if self.record:
+            self.cap.release()
+        if self.interface:
+            self.out.release()
         cv2.destroyWindow('Camera {}'.format(self.id))
         SurveillanceCamera.count -= 1
