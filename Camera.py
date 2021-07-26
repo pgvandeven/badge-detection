@@ -6,14 +6,10 @@ from sort.sort import *
 from Person import Person
 from utils import *
 
-#fourcc = cv2.VideoWriter_fourcc(*'XVID')
-#out = cv2.VideoWriter('output.mp4', fourcc, 24.0, (1920,1080))
-
-
 class SurveillanceCamera(object):
 
     count = 0
-    def __init__(self, id_number, face_predictor, badge_predictor, path_to_stream, camera_fps, wanted_fps, buffer_size, object_lifetime, max_badge_check_count, interface=True, record=False):
+    def __init__(self, id_number, face_predictor, badge_predictor, path_to_stream, camera_fps, wanted_fps, buffer_size, object_lifetime, max_badge_check_count, interface=True, record=None):
 
         self.id = id_number 
         self.buffer_size = buffer_size
@@ -22,12 +18,12 @@ class SurveillanceCamera(object):
         self.interface = interface
         self.cap = cv2.VideoCapture(path_to_stream) 
         self.record = record
-        if self.record:
+        if self.record is not None:
             now = datetime.now()
             current_time = now.strftime(r"%d-%m-%Y_%H-%M-%S")
             _, image = self.cap.read()
             fourcc = cv2.VideoWriter_fourcc(*'XVID')
-            self.out = cv2.VideoWriter('Camera {} - {}.mp4'.format(self.id, current_time), fourcc, wanted_fps, (image.shape[1],image.shape[0]))
+            self.out = cv2.VideoWriter(os.path.join(self.record, 'Camera {} - {}.mp4'.format(self.id, current_time)), fourcc, wanted_fps, (image.shape[1],image.shape[0]))
         self.mot_tracker = Sort(max_age=object_lifetime) 
         self.face_predictor = face_predictor
         self.badge_predictor = badge_predictor
