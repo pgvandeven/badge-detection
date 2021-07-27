@@ -15,9 +15,7 @@ class PersonDetector:
         from app.models.faceDetection.vision.ssd.mb_tiny_RFB_fd import create_Mb_Tiny_RFB_fd, \
             create_Mb_Tiny_RFB_fd_predictor
 
-        label_path = "../models/faceDetection/voc-model-labels.txt"
-        model_path = "../models/faceDetection/version-RFB-640.pth"
-        net_type = "RFB"
+        model_path = "app/models/faceDetection/version-RFB-640.pth"
         class_names = ['BACKGROUND', 'face']
         num_classes = len(class_names)
         net = create_Mb_Tiny_RFB_fd(num_classes, is_test=True, device=test_device)
@@ -40,7 +38,7 @@ class BadgeDetector:
         in_features = self.model.roi_heads.box_predictor.cls_score.in_features
         self.model.roi_heads.box_predictor = FastRCNNPredictor(in_features, num_classes=2)
         self.model.load_state_dict(
-            torch.load(os.path.join("../models", "badgeDetection", model_arch), map_location=torch.device(test_device)))
+            torch.load(os.path.join("app/models", "badgeDetection", model_arch), map_location=torch.device(test_device)))
         self.model.eval()
 
         print('Badge detection model loaded')

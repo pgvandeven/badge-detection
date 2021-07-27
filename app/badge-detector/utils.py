@@ -19,11 +19,11 @@ def image_loader(image):
 # Make sure all bbox coordinates are inside the image
 def normalise_bbox(bbox, image_dimensions):
     if bbox[0] < 0:
-        bbox[0] = 0
+        bbox[0] = 1
     if bbox[1] < 0:
-        bbox[0] = 0
+        bbox[0] = 1
     if bbox[2] > image_dimensions[1]:
-        bbox[2] = image_dimensions[1]
+        bbox[2] = image_dimensions[1]-1
     if bbox[3] > image_dimensions[0]:
-        bbox[3] = image_dimensions[0]
+        bbox[3] = image_dimensions[0]-1
     return bbox

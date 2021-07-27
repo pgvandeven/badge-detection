@@ -4,7 +4,7 @@ from datetime import datetime
 import cv2
 import numpy as np
 from torch import no_grad
-
+from random import randint
 from person import Person
 from sort.sort import Sort
 from utils import normalise_bbox, image_loader
@@ -13,10 +13,10 @@ from utils import normalise_bbox, image_loader
 class SurveillanceCamera(object):
     count = 0
 
-    def __init__(self, id_number, face_predictor, badge_predictor, path_to_stream, camera_fps, wanted_fps, buffer_size,
+    def __init__(self, id, face_predictor, badge_predictor, path_to_stream, camera_fps, wanted_fps, buffer_size,
                  object_lifetime, max_badge_check_count, interface=True, record=None):
 
-        self.id = id_number
+        self.id = id
         self.buffer_size = buffer_size
         self.object_lifetime = object_lifetime
         self.max_badge_check_count = max_badge_check_count
@@ -100,7 +100,7 @@ class SurveillanceCamera(object):
                         person = matched_person[0]
 
                     bbox = normalise_bbox(track_bbs_ids[tracked_person][:4], image_dimensions)
-                    person_score = np.round(face_scores[tracked_person], decimals=3)
+                    #person_score = np.round(face_scores[tracked_person], decimals=3)
                     xP = int(bbox[0])
                     yP = int(bbox[1])
                     x1P = int(bbox[2])
@@ -129,8 +129,7 @@ class SurveillanceCamera(object):
                 pass
         else:
             # Cover the scanario where no people were detected - perhaps a "hibernation" mode approach (start checking only once every 3 seconds instead of every frame)
-            print("Camera {} is now in power saving mode".format(self.id))
-            # time.sleep(3) <- this doesn't work because then the camera stream is set back 3 sec behind each time
+            pass
 
         if self.interface:
             x = int(self.orig_image.shape[1] / 12)
@@ -141,7 +140,7 @@ class SurveillanceCamera(object):
             cv2.imshow('Camera {}'.format(self.id), self.orig_image)
             # QUESTION
             # added a waitkey here because otherwise the visual interface freezes after a badge is found. But why? When a badge is found that's exactly when there's supposed to be less computation going on, i.e. the program should run smoother
-            cv2.waitKey(1)
+            #cv2.waitKey(1)
 
         if self.record is not None:
             self.out.write(self.orig_image)
@@ -176,33 +175,43 @@ class SurveillanceCamera(object):
                         badge_score = np.round(badge_prediction[0]["scores"][element].cpu().numpy(), decimals=2)
                         if badge_score > 0.4:
                             badges = badge_prediction[0]["boxes"][element].cpu().numpy()
-                            badges = badges / (self.orig_image.shape[0] / cutout_image.shape[0])
+                            #badges = badges / (self.orig_image.shape[0] / cutout_image.shape[0])
                             xB = int(badges[0])  # + xP - 10
                             yB = int(badges[1])  # + yP - 10
                             x1B = int(badges[2])  # + xP + 10
                             y1B = int(badges[3])  # + yP + 10
                             person.addScoreToBuffer(badge_score)
+
+                            now = datetime.now()
+                            current_time = now.strftime(r'%d-%m-%Y_%H-%M-%S')
+                            rint = randint(1, 1000)
+                            label = str(current_time) + str(rint)
+                            badge_cutout = cutout_image[yB:y1B, xB:x1B]
+                            path = os.path.join('/Users/nkybartas/Documents/GitHub/badge-detection/output', 'badges', '{}.jpg'.format(label))
+                            print('attempting to write to {}'.format(path))
+                            cv2.imwrite(path, badge_cutout)
+
                             cv2.rectangle(cutout_image, (xB, yB), (x1B, y1B), (0, 0, 255), 2)
                             cv2.putText(cutout_image, ('badge: ' + str(badge_score)), (xB, yB),
                                         cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
 
                     # Demo-ing the BUFFER
-                    # windowName = 'person {}'.format(person.get_id())
-                    # cv2.imshow(windowName, cutout_image)
-                    # cv2.waitKey(1)
-                # cv2.destroyWindow(windowName)
+                    windowName = 'person {}'.format(person.get_id())
+                    cv2.imshow(windowName, cutout_image)
+                    cv2.waitKey(1)
+                cv2.destroyWindow(windowName)
 
                 # Badge Evaluation
                 if person.getBufferOppacity(badges=True) > 0:
                     confidence = sum(person.getBuffer(badges=True)) / person.getBufferOppacity(badges=True)
-                    if confidence >= 0.85:
+                    if confidence >= 0.6:
                         #
                         # implement badge classification here
                         #
                         value = True
                         person.clearBuffer(badges=True)
                         # print("Person {} is wearing a SBP badge. Confidence: {}".format(person.get_id(), np.round(confidence, decimals=2)))
-                    elif confidence >= 0.70:
+                    elif confidence >= 0.4:
                         value = None
                         # print("Can't distinguish whether person {} is wearing a badge. Checking again".format(person.get_id()))
                     else:
@@ -223,8 +232,8 @@ class SurveillanceCamera(object):
     def __del__(self):
         print("Camera {} turned off".format(self.id))
         if self.record is not None:
-            self.cap.release()
-        if self.interface:
             self.out.release()
+        if self.interface:
+            self.cap.release()
         cv2.destroyWindow('Camera {}'.format(self.id))
         SurveillanceCamera.count -= 1
