@@ -127,14 +127,14 @@ class SurveillanceCamera(object):
                             color = (0, 0, 255)
 
                         cv2.rectangle(self.orig_image, (xP, yP), (x1P, y1P), color, 2)
-                        cv2.putText(self.orig_image, ('person {} - {}'.format(person_id, person_score)), (xP, yP), cv2.FONT_HERSHEY_SIMPLEX, 0.7, color, 2)
+                        cv2.putText(self.orig_image, ('person {}'.format(person_id)), (xP, yP), cv2.FONT_HERSHEY_SIMPLEX, 0.7, color, 2)
                 else:
                     # Cover the scenario where there are people detected, but they couldn't be tracked
                     pass
             else:
                 # Cover the scanario where no people were detected - perhaps a "hibernation" mode approach (start checking only once every 3 seconds instead of every frame)
                 print("Camera {} is now in power saving mode".format(self.id))
-                time.sleep(3)
+                #time.sleep(3) <- this doesn't work because then the camera stream is set back 3 sec behind each time
 
             if self.interface:
                 x = int(self.orig_image.shape[1]/12)
@@ -142,11 +142,12 @@ class SurveillanceCamera(object):
                 size = int(x/40)
                 cv2.putText(self.orig_image, "Tracking: {}".format(len(self.tracked_person_list)), (x, y), cv2.FONT_HERSHEY_SIMPLEX, size, (100,0,255), int(size))
                 cv2.imshow('Camera {}'.format(self.id), self.orig_image)
-                self.out.write(self.orig_image)
                 # QUESTION
                 # added a waitkey here because otherwise the visual interface freezes after a badge is found. But why? When a badge is found that's exactly when there's supposed to be less computation going on, i.e. the program should run smoother
                 cv2.waitKey(1)
-
+            
+            if self.record is not None:
+                self.out.write(self.orig_image)
 
             # Check the buffer size for each person, if available, check for their badges
             for person in self.tracked_person_list:
@@ -164,12 +165,11 @@ class SurveillanceCamera(object):
                     # Exit the loop
                     continue
 
-                if person.hasBadge() == None and person.getBufferOppacity() == self.buffer_size:
+                if person.hasBadge() == None and person.getBufferOppacity() == person.getMaxBufferSize():
                     image_batch = person.getBuffer()
-                    badge_list = []
 
                     # Badge Detection
-                    for image_id in range(self.buffer_size):
+                    for image_id in range(person.getMaxBufferSize()):
                         
                         with no_grad():
                             badge_prediction = self.badge_predictor(image_batch[image_id])
@@ -177,14 +177,14 @@ class SurveillanceCamera(object):
                         cutout_image = person.getImage(image_id)
                         for element in range(len(badge_prediction[0]["boxes"])):
                             badge_score = np.round(badge_prediction[0]["scores"][element].cpu().numpy(), decimals= 2)
-                            if badge_score > 0.8:  
+                            if badge_score > 0.4:  
                                 badges = badge_prediction[0]["boxes"][element].cpu().numpy()
                                 badges = badges/(self.orig_image.shape[0]/cutout_image.shape[0])
                                 xB = int(badges[0])# + xP - 10
                                 yB = int(badges[1])# + yP - 10
                                 x1B = int(badges[2])# + xP + 10
                                 y1B = int(badges[3]) #+ yP + 10
-                                badge_list.append(badge_score)
+                                person.addScoreToBuffer(badge_score)
                                 cv2.rectangle(cutout_image, (xB, yB), (x1B, y1B), (0,0,255), 2)
                                 cv2.putText(cutout_image, ('badge: ' + str(badge_score)), (xB, yB), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
 
@@ -195,14 +195,14 @@ class SurveillanceCamera(object):
                     #cv2.destroyWindow(windowName)
                     
                     # Badge Evaluation
-                    if len(badge_list) > 0:
-                        confidence = sum(badge_list)/len(badge_list)
+                    if person.getBufferOppacity(badges=True) > 0:
+                        confidence = sum(person.getBuffer(badges=True))/person.getBufferOppacity(badges=True)
                         if confidence >= 0.85:
                             # 
                             # implement badge classification here
                             #
                             value = True
-                            person.clearBuffer() #This person won't be checked again - free-ing up memory
+                            person.clearBuffer(badges=True)
                             #print("Person {} is wearing a SBP badge. Confidence: {}".format(person.getID(), np.round(confidence, decimals=2)))
                         elif confidence >=0.70:
                             value = None
@@ -210,6 +210,7 @@ class SurveillanceCamera(object):
                         else:
                             value = None
                             #print("Person {} is not wearing a SBP badge".format(person.getID()))
+                        person.clearBuffer()
                         person.setBadge(value)
                     else:
                         person.setBadge(None)
@@ -220,11 +221,10 @@ class SurveillanceCamera(object):
                         print("ALERT")
                         print("Camera {} found that person {} does not have a badge".format(self.id, person.getID()))
                         person.setBadge(False)
-        
 
     def __del__(self):
         print("Camera {} turned off".format(self.id))
-        if self.record:
+        if self.record is not None:
             self.cap.release()
         if self.interface:
             self.out.release()

@@ -9,6 +9,7 @@ class Person(object):
         self.id = id
         self.maxBufferSize = maxBufferSize
         self.buffer = []
+        self.buffer_badges = []
         self.badge = None
         self.badgeCheckCount = 0
         self.maxLifetime = maxLifetime
@@ -21,14 +22,21 @@ class Person(object):
     def getID(self):
         return self.id
 
-    def getBufferOppacity(self):
+    def getBufferOppacity(self, badges=None):
+        if badges is not None:
+            return len(self.buffer_badges)
         return len(self.buffer)
 
-    def getBuffer(self):
+    def getBuffer(self, badges=None):
+        if badges is not None:
+            return self.buffer_badges
         return self.buffer
     
-    def clearBuffer(self):
+    def clearBuffer(self, badges=None):
+        if badges is not None:
+            self.buffer_badges = []
         self.buffer = []
+        self.maxBufferSize = 1
 
     def getMaxBufferSize(self):
         return self.maxBufferSize
@@ -46,12 +54,15 @@ class Person(object):
         if self.getBufferOppacity() >= self.getMaxBufferSize():
             del self.buffer[0]
         self.buffer.append(image)
+
+    def addScoreToBuffer(self, score):
+        self.buffer_badges.append(score)
     
     def hasBadge(self):
         return self.badge
     
     def setBadge(self, value=None):
-        if value != True:
+        if value is None:
             self.badgeCheckCount +=1
         self.badge = value
 

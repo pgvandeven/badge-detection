@@ -17,20 +17,19 @@ badge_detection_model = BadgeDetector().model
 
 #camera1 = SurveillanceCamera(1, person_detection_model, badge_detection_model, PATH_TO_1PERSON_TEST_VIDEO, 25, 25, BUFFER, OBJECT_LIFETIME, MAX_BADGE_CHECK_COUNT)
 #camera2 = SurveillanceCamera(2, person_detection_model, badge_detection_model, PATH_TO_2PERSON_TEST_VIDEO, 25, 25, BUFFER, OBJECT_LIFETIME, MAX_BADGE_CHECK_COUNT)
-camera3 = SurveillanceCamera(3, person_detection_model, badge_detection_model, PATH_TO_MULTI_PERSON_TEST_VIDEO, 25, 25, BUFFER, OBJECT_LIFETIME, MAX_BADGE_CHECK_COUNT, record='output')
-#goproCam = SurveillanceCamera('GoPro', person_detection_model, badge_detection_model, 'udp://127.0.0.1:10000', 30, 3, BUFFER, OBJECT_LIFETIME, MAX_BADGE_CHECK_COUNT, interface = True, record='output')
+camera3 = SurveillanceCamera(3, person_detection_model, badge_detection_model, PATH_TO_MULTI_PERSON_TEST_VIDEO, 25, 3, BUFFER, OBJECT_LIFETIME, MAX_BADGE_CHECK_COUNT, record='output')
+#goproCam = SurveillanceCamera('GoPro', person_detection_model, badge_detection_model, 'udp://127.0.0.1:10000', 30, 10, BUFFER, OBJECT_LIFETIME, MAX_BADGE_CHECK_COUNT, interface = True, record='output')
 camera_list = []
 camera_list.append(camera3)
 
 while True:
 
     # TODO: Introduce multiprocessing so that each camera can run in parallel
-    #camera1.update()
-    #camera2.update()
-    #camera3.update()
+
     for camera in camera_list:
         camera.update()
     
     if 0xFF == ord('q'):
-        camera_list.pop(0)
+        for camera in camera_list:
+            camera_list.pop(camera)
         break
