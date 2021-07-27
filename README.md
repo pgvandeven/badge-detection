@@ -1,5 +1,11 @@
 # Badge Detection
 
+# To run:
+git clone
+cd to directory and in terminal execute:
+export PYTHONPATH="${PYTHONPATH}:/`pwd`"
+python3 app/badge-detector/main.py
+
 # Change Log / Process Flow / Updates
 The person detection model will be doing a lot of work in areas with a significant amount of people - it needs to be very lightweight & fast, yet still reliable - that's why we chose the ssd model provided by Linzaer. It comes in a couple versions, we're still testing out which one to choose, so far the lightest one (version-RFB-320) seems to be working just fine.
 
@@ -16,7 +22,7 @@ That's when we started looking for a new approach and the mobilenet-v3 seems to 
 - A single person will only be checked a certain amount of times, and will be assigned a bagde value of either True or False.
 - There are now 3 colour codes - light blue for persons being checked, green for persons that have a badge, and red for persons that do not have a badge.
 - person bounding boxes are now dynamic, calculated using the ratio between the human head and body - this means that a cutout picture of a person more in the back will cover the same amount of body mass as it would if the person was more in the front.
-- I attempted to introduce multi-threading in [thridAttempt.py](https://github.com/nojuskybartas/badge-detection/blob/main/thirdAttempt.py), however that was unsuccessful. 
+- I attempted to introduce multi-threading however that was unsuccessful. 
 
 # TODO:
 - investigate multithreading
@@ -24,7 +30,15 @@ That's when we started looking for a new approach and the mobilenet-v3 seems to 
 - improve the accuracy of the detection model
 - build the classification model
 - build the interface
-- optimization
+- optimization, mainly for the stream input, as reading the image is so far the heaviest task
+- rewrite the ipython training code into regular python syntax
+
+## Update (27 July 2021):
+- the Camera is now an object, and therefore can be easily created with all its parameters. The camera also has a parameter for recording and interface. 
+- introduced an fps engine
+- For dev purposes the camera now stores each detected badge
+- general bug fixes and cleanup
+
 
 ## [ultra-lightweight face detection model](https://github.com/Linzaer/Ultra-Light-Fast-Generic-Face-Detector-1MB)
 This model is a lightweight facedetection model designed for edge computing devices.
