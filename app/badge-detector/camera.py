@@ -187,7 +187,7 @@ class SurveillanceCamera(object):
                             rint = randint(1, 1000)
                             label = str(current_time) + str(rint)
                             badge_cutout = cutout_image[yB:y1B, xB:x1B]
-                            path = os.path.join('/Users/nkybartas/Documents/GitHub/badge-detection/output', 'badges', '{}.jpg'.format(label))
+                            path = os.path.join('/Users/pvandeven/Documents/GitHub/badge-detection/output', 'badges', '{}.jpg'.format(label))
                             print('attempting to write to {}'.format(path))
                             cv2.imwrite(path, badge_cutout)
 
