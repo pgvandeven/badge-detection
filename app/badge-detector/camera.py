@@ -140,7 +140,7 @@ class SurveillanceCamera(object):
             cv2.imshow('Camera {}'.format(self.id), self.orig_image)
             # QUESTION
             # added a waitkey here because otherwise the visual interface freezes after a badge is found. But why? When a badge is found that's exactly when there's supposed to be less computation going on, i.e. the program should run smoother
-            #cv2.waitKey(1)
+            cv2.waitKey(1)
 
         if self.record is not None:
             self.out.write(self.orig_image)
